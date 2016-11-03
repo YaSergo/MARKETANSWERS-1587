@@ -42,5 +42,6 @@ FROM
 WHERE
 	-- -60 - попытка исправить лаг при записи в access
 	-- в таблице front_access встречаются записи, которые на несколько секунд раньше начала визита
+  -- подробности в презентации https://st.yandex-team.ru/MARKETANSWERS-1587#1475762493000
 	access.access_time >= (visits.visit_start_time - 60)
     AND access.access_time <  visits.visit_start_time + visits.visit_duration

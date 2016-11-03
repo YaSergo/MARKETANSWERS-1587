@@ -3,7 +3,7 @@ CREATE TABLE medintsev.market_page_cpm_clicks20
 	COMMENT 'clicks for cpm calculation'
 AS
 SELECT
-	unix_timestamp(eventtime) as click_time,     -- в документации ничего про это поле не сказано
+	unix_timestamp(eventtime) as click_time,
 	cookie as yandexuid,              -- кука yandexuid или пустое значение
 	pp,
 	hyper_id,
@@ -14,4 +14,5 @@ WHERE
 	AND state = 1        -- в документации ничего про это поле не сказано
 	AND day >= '2016-10-01'
 	AND day <= '2016-10-21'
-	-- AND NOT ISNULL(yandexuid) -- что-то такое должно быть, зачем нам в таблицу добавлять данные, которые не подвязываются... но для отладки оставил
+	-- зачем нам в таблицу добавлять данные, которые не подвязываются...
+	AND cookie IS NOT NULL
