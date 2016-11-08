@@ -1,2 +1,6 @@
 trash/*
 ~*
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata

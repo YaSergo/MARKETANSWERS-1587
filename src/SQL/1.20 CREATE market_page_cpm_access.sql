@@ -111,6 +111,9 @@ FROM
 				day >= '2016-10-01'
 				AND day <= '2016-10-21'
 				AND yandexuid IS NOT NULL
+				-- страница загружена без ошибок
+				-- подробности: https://st.yandex-team.ru/MARKETANSWERS-1587#1478519919000
+				AND status = '200'
 		) t
 	) t
 ) t
