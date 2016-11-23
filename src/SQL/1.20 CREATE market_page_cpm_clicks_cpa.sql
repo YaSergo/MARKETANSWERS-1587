@@ -12,11 +12,11 @@ SELECT
   -- https://st.yandex-team.ru/MARKETANSWERS-1587#1477662737000
 FROM robot_market_logs.cpa_clicks
 WHERE
-  day >= '2016-10-01' AND
-  day <= '2016-10-21' AND
+  day >= '2016-10-18' AND
+  day <= '2016-11-16' AND
   nvl(filter, 0) = 0 AND
   state = 1 AND
   nvl(type_id, 0) = 0
   -- AND touch = 0 -- нас интересует только desktop клики
   -- зачем нам в таблицу добавлять данные, которые не подвязываются...
-  AND cookie IS NOT NULL
+  AND nvl(cookie, '') <> ''

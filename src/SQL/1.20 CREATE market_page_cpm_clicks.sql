@@ -12,7 +12,7 @@ FROM robot_market_logs.clicks
 WHERE
 	filter = 0     -- не накрутка
 	AND state = 1        -- в документации ничего про это поле не сказано
-	AND day >= '2016-10-01'
-	AND day <= '2016-10-21'
+	AND day >= '2016-10-18'
+	AND day <= '2016-11-16'
 	-- зачем нам в таблицу добавлять данные, которые не подвязываются...
-	AND cookie IS NOT NULL
+	AND nvl(cookie, '') <> ''

@@ -108,9 +108,9 @@ FROM
 			FROM robot_market_logs.front_access
 			WHERE
 				-- 21 день, в визитах будет 20
-				day >= '2016-10-01'
-				AND day <= '2016-10-21'
-				AND yandexuid IS NOT NULL
+				day >= '2016-10-18'
+				AND day <= '2016-11-16'
+				AND nvl(yandexuid, '') <> ''
 				-- страница загружена без ошибок
 				-- подробности: https://st.yandex-team.ru/MARKETANSWERS-1587#1478519919000
 				AND status = '200'

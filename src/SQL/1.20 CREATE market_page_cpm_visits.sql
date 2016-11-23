@@ -20,7 +20,7 @@ SELECT
 FROM
 	robot_market_logs.visits
 WHERE
-	day >= '2016-10-01'
-	AND day <= '2016-10-20'
+	day >= '2016-10-18'
+	AND day <= '2016-11-15'
 	-- зачем нам в таблицу добавлять данные, которые не подвязываются...
 	AND user_id IS NOT NULL

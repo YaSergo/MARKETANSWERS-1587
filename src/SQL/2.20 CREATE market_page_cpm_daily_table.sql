@@ -1,6 +1,6 @@
 DROP TABLE IF EXISTS medintsev.market_page_cpm_daily_table20;
 CREATE TABLE medintsev.market_page_cpm_daily_table20
-COMMENT 'daily data for cpm calculations (20 days)'
+COMMENT 'daily data for cpm calculations'
 -- в данной табличке удобно смотреть что происходило в течении визита
 AS
 SELECT
