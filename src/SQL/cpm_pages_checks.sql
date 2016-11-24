@@ -1,5 +1,5 @@
 set start_date=      '2016-11-20';
-set end_date=        '2016-11-20';
+set end_date=        '2016-11-21';
 set end_date_visits= '2016-11-20';
 
 WITH access_orig AS (
@@ -75,7 +75,6 @@ WITH access_orig AS (
     FROM access_orig
   ) t
   WHERE page_groupid_1 > 0
-  --AND page_groupid_2 = 13584123 -- ДЛЯ ОТЛАДКИ!!!
 
 ), access AS (
   SELECT -- удаляем перезагрузку страниц
@@ -104,6 +103,8 @@ WITH access_orig AS (
   SELECT
     unix_timestamp(eventtime) as click_time, -- время клика
     cookie as yandexuid, -- id пользователя
+    pp,
+    hyper_id, -- id модели
     offer_price*fee*0.05 AS price  -- Цена клика в рублях с учетом CPA коэффициента
     -- 0.05 оценочное значение, после запуска https://paste.yandex-team.ru/170192
     -- https://st.yandex-team.ru/MARKETANSWERS-1587#1477662737000
@@ -119,6 +120,8 @@ WITH access_orig AS (
   SELECT
     unix_timestamp(eventtime) AS click_time,
     cookie AS yandexuid,
+    pp,
+    hyper_id,
     price*30/100 AS price  -- Цена клика в рублях
   FROM robot_market_logs.clicks
   WHERE
@@ -149,16 +152,12 @@ WITH access_orig AS (
 
 ), visits_cpa_details AS (
   SELECT -- видно что происходило внутри визита (загрузка страниц + CPA клики)
-    visits.visit_id,
-    visits.visit_start_time,
-    visits.visit_duration,
-    visits.yandexuid,
-    visits.geo_id,
-    visits.device,
-
+    visits.*,
     'click' as event,
     clicks_cpa.click_time as event_time,
     clicks_cpa.price,
+    clicks_cpa.pp,
+    clicks_cpa.hyper_id,
     NULL as request,
     NULL as page_groupid_1,
     NULL as page_groupid_2
@@ -172,16 +171,12 @@ WITH access_orig AS (
   UNION ALL
 
   SELECT
-    visits.visit_id,
-    visits.visit_start_time,
-    visits.visit_duration,
-    visits.yandexuid,
-    visits.geo_id,
-    visits.device,
-
+    visits.*,
     'access' as event,
     access_time as event_time,
     0 as price,
+    NULL as pp,
+    IF(page_groupid_1 = 1, page_groupid_2, NULL) as hyper_id, -- ещё для каких-либо типов страниц это условие выполняется?
     request,
     page_groupid_1,
     page_groupid_2
@@ -207,6 +202,8 @@ WITH access_orig AS (
     'click' AS event,
     clicks_cpc.click_time AS event_time,
     clicks_cpc.price,
+    clicks_cpc.pp,
+    clicks_cpc.hyper_id,
     NULL AS request,
     NULL AS page_groupid_1,
     NULL AS page_groupid_2
@@ -230,6 +227,8 @@ WITH access_orig AS (
     'access' as event,
     access_time as event_time,
     0 as price,
+    NULL as pp,
+    IF(page_groupid_1 = 1, page_groupid_2, NULL) as hyper_id, -- ещё для каких-либо типов страниц это условие выполняется?
     request,
     page_groupid_1,
     page_groupid_2
@@ -336,29 +335,15 @@ WITH access_orig AS (
 )
 
 SELECT
-  'CPA' as type,
-  page_groupid_1,
-  page_groupid_2,
-  device,
-  geo_id,
-  CPM_avg,
-  n,
-  n_gtz,  -- количество визитов у которых CPM было больше ноля
-  sd
-FROM
-  cpm_per_page_groupids_cpa
+  'CPA' AS type,
+  *
+FROM cpm_per_visits_cpa
+WHERE cpm_visit > 5000
 
 UNION ALL
 
 SELECT
-  'CPC' as type,
-  page_groupid_1,
-  page_groupid_2,
-  device,
-  geo_id,
-  CPM_avg,
-  n,
-  n_gtz,  -- количество визитов у которых CPM было больше ноля
-  sd
-FROM
-  cpm_per_page_groupids_cpc
+  'CPC' AS type,
+  *
+FROM cpm_per_visits_cpc
+WHERE cpm_visit > 5000
