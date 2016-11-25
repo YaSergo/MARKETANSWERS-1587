@@ -242,14 +242,11 @@ WITH access_orig AS (
 )
 
 SELECT
-  visits_details.*
+  page_groupid_1,
+  page_groupid_2,
+  CPM_avg,
+  n,
+  n_gtz,  -- количество визитов у которых CPM было больше ноля
+  sd
 FROM
-  visits_details RIGHT JOIN
-  (
-    SELECT DISTINCT visit_id
-    FROM visits_details
-    WHERE event = 'access'
-  ) visits_good
-    ON visits_details.visit_id = visits_good.visit_id
-ORDER BY
-  visit_start_time, visit_id, event_time
+  cpm_per_page_groupids
