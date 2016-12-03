@@ -1,12 +1,6 @@
-delete FILES;
-add FILE hdfs://marmot/user/medintsev/MARKETANSWERS-1587/src/python/bootstrap_cpm.py;
-
-set hive.auto.convert.join = true;
-set mapred.reduce.tasks=500;
-
-set start_date=      '2016-11-20';
-set end_date=        '2016-11-20';
-set end_date_visits= '2016-11-20';
+set start_date=      '2016-10-26';
+set end_date=        '2016-11-24';
+set end_date_visits= '2016-11-23';
 
 set n_groups =       100;
 
@@ -139,7 +133,8 @@ WITH access_orig AS (
     visit_id as visit_id,
     utc_start_time as visit_start_time,
     duration as visit_duration,
-    user_id as yandexuid
+    user_id as yandexuid,
+    INT(SUBSTR(user_id, 1, 7)) % ${hiveconf:n_groups} AS user_group
   FROM
     robot_market_logs.visits
   WHERE
@@ -152,6 +147,7 @@ WITH access_orig AS (
     visits.visit_start_time,
     visits.visit_duration,
     visits.yandexuid,
+    visits.user_group,
 
     'cpa click' as event,
     clicks_cpa.click_time as event_time,
@@ -173,6 +169,7 @@ WITH access_orig AS (
     visits.visit_start_time,
     visits.visit_duration,
     visits.yandexuid,
+    visits.user_group,
 
     'cpc click' as event,
     clicks_cpc.click_time as event_time,
@@ -194,6 +191,7 @@ WITH access_orig AS (
     visits.visit_start_time,
     visits.visit_duration,
     visits.yandexuid,
+    visits.user_group,
 
     'access' as event,
     access_time as event_time,
@@ -215,6 +213,7 @@ WITH access_orig AS (
 ), cpm_per_visits AS (
   SELECT
     visit_id,
+    user_group,
     page_groupid_1,
     page_groupid_2,
     AVG(pre_CPM) as cpm_visit
@@ -222,6 +221,7 @@ WITH access_orig AS (
     (
       SELECT -- запрос считает кумулятивную сумму внутри визита (по сути реализует формулу Влада)
         visit_id,
+        user_group,
         page_groupid_1,
         page_groupid_2,
         event,
@@ -231,48 +231,12 @@ WITH access_orig AS (
   WHERE event = 'access'
   GROUP BY
     visit_id,
+    user_group,
     page_groupid_1,
     page_groupid_2
-
-), cpm_by_groupid AS (
-  SELECT
-    page_groupid_1,
-    page_groupid_2,
-    AVG(cpm_visit) as cpm,
-    COUNT(*) as n,
-    stddev_samp(cpm_visit) as sd,
-    collect_list(cpm_visit) as cpms -- для ОТЛАДКИ
-  FROM
-    cpm_per_visits
-  GROUP BY
-    page_groupid_1,
-    page_groupid_2
-  HAVING
-    cpm > 0 AND -- CPM хоть какое-то
-    n > 100 -- количество визитов больше 100
 
 )
 
-SELECT
-  TRANSFORM
-  (
-    page_groupid_1,
-    page_groupid_2,
-    cpm,
-    n,
-    sd,
-    cpms
-  )
-  USING 'python bootstrap_cpm.py'
-  AS
-  (
-    page_groupid_1,
-    page_groupid_2,
-    cpm,
-    n,
-    sd,
-    bootstrap_mean,
-    left_border,
-    right_border
-  )
-FROM cpm_by_groupid
+SELECT *
+FROM cpm_per_visits
+WHERE cpm_visit > 3000
