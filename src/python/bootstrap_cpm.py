@@ -6,7 +6,7 @@ import numpy as np
 
 from random import choice, seed
 
-np.random.seed(1234)
+# np.random.seed(1234)
 seed(1234)
 
 def stringToList(line):
@@ -18,7 +18,7 @@ def stringToList(line):
 
 def bootstrap(sample, samplesize = None, nsamples = 1000, alpha = 0.05):
     if samplesize is None:                                                                   
-        samplesize=len(sample)
+        samplesize=min(50000, len(sample))
 
     # resample = [np.random.choice(sample, size = samplesize).mean() for _ in range(nsamples)]
     # At marmot have an old version of numpy........... np.random.choice doesn't work
@@ -42,6 +42,4 @@ for line in sys.stdin:
     bs_result = bootstrap(cpms)
     # python 3.3 так не разрешает
     # print(page_groupid_1, page_groupid_2, cpm, n, sd, cpms, bs_result[0], bs_result[1], bs_result[2], sep="\t")
-
-    # print("\t".join([page_groupid_1, page_groupid_2, cpm, n, sd, cpms_string, str(bs_result[0]), str(bs_result[1]), str(bs_result[2])]))
     print("\t".join([page_groupid_1, page_groupid_2, cpm, n, sd, str(bs_result[0]), str(bs_result[1]), str(bs_result[2])]))

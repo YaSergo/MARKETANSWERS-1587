@@ -1,6 +1,12 @@
-set start_date=      '2016-11-20';
-set end_date=        '2016-11-20';
-set end_date_visits= '2016-11-20';
+delete FILES;
+add FILE hdfs://marmot/user/medintsev/MARKETANSWERS-1587/src/python/bootstrap_cpm.py;
+
+set hive.auto.convert.join = true;
+set mapred.reduce.tasks=500;
+
+set start_date=      '2016-10-31';
+set end_date=        '2016-12-02';
+set end_date_visits= '2016-12-01';
 
 WITH access_orig AS (
   SELECT -- выбираем из access данные за требуемое время
@@ -75,7 +81,6 @@ WITH access_orig AS (
     FROM access_orig
   ) t
   WHERE page_groupid_1 > 0
-  --AND page_groupid_2 = 13584123 -- ДЛЯ ОТЛАДКИ!!!
 
 ), access AS (
   SELECT -- удаляем перезагрузку страниц
@@ -86,19 +91,22 @@ WITH access_orig AS (
     page_groupid_2
   FROM
   (
-    SELECT
+    SELECT -- данные не отсортированы, но сгруппированы по yandexuid
       access_time,
       request,
       yandexuid,
       page_groupid_1,
       page_groupid_2,
       LAG(page_groupid_1) OVER (PARTITION BY yandexuid ORDER BY access_time) AS prev_page_groupid_1,
-      LAG(page_groupid_2) OVER (PARTITION BY yandexuid ORDER BY access_time) AS prev_page_groupid_2
+      LAG(page_groupid_2) OVER (PARTITION BY yandexuid ORDER BY access_time) AS prev_page_groupid_2,
+      LAG(yandexuid)      OVER (PARTITION BY yandexuid ORDER BY access_time) AS prev_yandexuid
     FROM access_with_page_groupids
   ) t
   WHERE
     -- убираем перезагрузку страниц
-    page_groupid_1 <> nvl(prev_page_groupid_1,-1) OR page_groupid_2 <> nvl(prev_page_groupid_2,-1)
+    page_groupid_1 <> nvl(prev_page_groupid_1,-1) OR
+    page_groupid_2 <> nvl(prev_page_groupid_2,-1) OR
+    yandexuid      <> nvl(prev_yandexuid,-1)
 
 ), clicks_cpa AS (
   SELECT
@@ -132,31 +140,21 @@ WITH access_orig AS (
     visit_id as visit_id,
     utc_start_time as visit_start_time,
     duration as visit_duration,
-    user_id as yandexuid,
-    region_id as geo_id,
-    CASE
-      WHEN NOT is_mobile AND NOT is_tablet AND NOT is_tv THEN 'desktop'
-      WHEN is_tv THEN 'tv'
-      WHEN is_tablet THEN 'tablet'
-      WHEN is_mobile THEN 'mobile'
-      ELSE 'other'
-    END as device
+    user_id as yandexuid
   FROM
     robot_market_logs.visits
   WHERE
     day BETWEEN ${hiveconf:start_date} AND ${hiveconf:end_date_visits} AND
     nvl(user_id, '') <> '' -- указан yandexuid
 
-), visits_cpa_details AS (
-  SELECT -- видно что происходило внутри визита (загрузка страниц + CPA клики)
+), visits_details AS (
+  SELECT -- видно что происходило внутри визита (загрузка страниц + клики)
     visits.visit_id,
     visits.visit_start_time,
     visits.visit_duration,
     visits.yandexuid,
-    visits.geo_id,
-    visits.device,
 
-    'click' as event,
+    'cpa click' as event,
     clicks_cpa.click_time as event_time,
     clicks_cpa.price,
     NULL as request,
@@ -164,10 +162,10 @@ WITH access_orig AS (
     NULL as page_groupid_2
   FROM
     visits LEFT JOIN clicks_cpa
-    ON visits.yandexuid = clicks_cpa.yandexuid
+      ON visits.yandexuid = clicks_cpa.yandexuid
   WHERE
-    clicks_cpa.click_time >= visits.visit_start_time
-    AND clicks_cpa.click_time <  visits.visit_start_time + visits.visit_duration
+    clicks_cpa.click_time >= visits.visit_start_time AND
+    clicks_cpa.click_time <  visits.visit_start_time + visits.visit_duration
 
   UNION ALL
 
@@ -176,46 +174,19 @@ WITH access_orig AS (
     visits.visit_start_time,
     visits.visit_duration,
     visits.yandexuid,
-    visits.geo_id,
-    visits.device,
 
-    'access' as event,
-    access_time as event_time,
-    0 as price,
-    request,
-    page_groupid_1,
-    page_groupid_2
-  FROM
-    visits LEFT JOIN access
-    ON visits.yandexuid = access.yandexuid
-  WHERE
-    -- -60 - попытка исправить лаг при записи в access
-    -- в таблице front_access встречаются записи, которые на несколько секунд раньше начала визита
-    -- подробности в презентации https://st.yandex-team.ru/MARKETANSWERS-1587#1475762493000
-    access.access_time >= (visits.visit_start_time - 60)
-      AND access.access_time <  visits.visit_start_time + visits.visit_duration
-
-), visits_cpc_details AS (
-  SELECT -- видно что происходило внутри визита (загрузка страниц + CPC клики)
-    visits.visit_id,
-    visits.visit_start_time,
-    visits.visit_duration,
-    visits.yandexuid,
-    visits.geo_id,
-    visits.device,
-
-    'click' AS event,
-    clicks_cpc.click_time AS event_time,
+    'cpc click' as event,
+    clicks_cpc.click_time as event_time,
     clicks_cpc.price,
-    NULL AS request,
-    NULL AS page_groupid_1,
-    NULL AS page_groupid_2
+    NULL as request,
+    NULL as page_groupid_1,
+    NULL as page_groupid_2
   FROM
     visits LEFT JOIN clicks_cpc
-    ON visits.yandexuid = clicks_cpc.yandexuid
+      ON visits.yandexuid = clicks_cpc.yandexuid
   WHERE
-    clicks_cpc.click_time >= visits.visit_start_time
-    AND clicks_cpc.click_time <  visits.visit_start_time + visits.visit_duration
+    clicks_cpc.click_time >= visits.visit_start_time AND
+    clicks_cpc.click_time <  visits.visit_start_time + visits.visit_duration
 
   UNION ALL
 
@@ -224,8 +195,6 @@ WITH access_orig AS (
     visits.visit_start_time,
     visits.visit_duration,
     visits.yandexuid,
-    visits.geo_id,
-    visits.device,
 
     'access' as event,
     access_time as event_time,
@@ -243,122 +212,68 @@ WITH access_orig AS (
     access.access_time >= (visits.visit_start_time - 60)
       AND access.access_time <  visits.visit_start_time + visits.visit_duration
 
-), cpm_per_visits_cpa AS (
-  SELECT -- запрос рассчитывает CPM для каждого визита
+-- CPM для каждого визита
+), cpm_per_visits AS (
+  SELECT
     visit_id,
     page_groupid_1,
     page_groupid_2,
-    device,
-    geo_id,
     AVG(pre_CPM) as cpm_visit
   FROM
     (
-      SELECT -- запрос считает кумулятивную сумму
+      SELECT -- запрос считает кумулятивную сумму внутри визита (по сути реализует формулу Влада)
         visit_id,
         page_groupid_1,
         page_groupid_2,
-        geo_id,
-        device,
         event,
         SUM(price) OVER (PARTITION BY visit_id ORDER BY event_time DESC) as pre_CPM
-      FROM visits_cpa_details
+      FROM visits_details
     ) t
   WHERE event = 'access'
   GROUP BY
     visit_id,
     page_groupid_1,
-    page_groupid_2,
-    geo_id,
-    device
+    page_groupid_2
 
-), cpm_per_visits_cpc AS (
-  SELECT -- запрос рассчитывает CPM для каждого визита
-    visit_id,
+), cpm_by_groupid AS (
+  SELECT
     page_groupid_1,
     page_groupid_2,
-    device,
-    geo_id,
-    AVG(pre_CPM) as cpm_visit
+    AVG(cpm_visit) as cpm,
+    COUNT(*) as n,
+    stddev_samp(cpm_visit) as sd,
+    collect_list(cpm_visit) as cpms -- для ОТЛАДКИ
   FROM
-    (
-      SELECT -- запрос считает кумулятивную сумму
-        visit_id,
-        page_groupid_1,
-        page_groupid_2,
-        geo_id,
-        device,
-        event,
-        SUM(price) OVER (PARTITION BY visit_id ORDER BY event_time DESC) as pre_CPM
-      FROM visits_cpc_details
-    ) t
-  WHERE event = 'access'
+    cpm_per_visits
   GROUP BY
-    visit_id,
     page_groupid_1,
-    page_groupid_2,
-    geo_id,
-    device
+    page_groupid_2
+  HAVING
+    cpm > 0 AND -- CPM хоть какое-то
+    n > 1000 -- количество визитов больше 1000
 
-), cpm_per_page_groupids_cpa AS (
-  SELECT
-    page_groupid_1,
-    page_groupid_2,
-    device,
-    geo_id,
-    AVG(CPM_visit) as CPM_avg,
-    COUNT(*) as n,
-    sum(if(CPM_visit > 0, 1, 0)) as n_gtz,  -- количество визитов у которых CPM было больше ноля
-    stddev_samp(CPM_visit) as sd
-  FROM cpm_per_visits_cpa
-  GROUP BY
-    page_groupid_1,
-    page_groupid_2,
-    device,
-    geo_id
-
-), cpm_per_page_groupids_cpc AS (
-  SELECT
-    page_groupid_1,
-    page_groupid_2,
-    device,
-    geo_id,
-    AVG(CPM_visit) as CPM_avg,
-    COUNT(*) as n,
-    sum(if(CPM_visit > 0, 1, 0)) as n_gtz,  -- количество визитов у которых CPM было больше ноля
-    stddev_samp(CPM_visit) as sd
-  FROM cpm_per_visits_cpc
-  GROUP BY
-    page_groupid_1,
-    page_groupid_2,
-    device,
-    geo_id
-    
 )
 
 SELECT
-  'CPA' as type,
-  page_groupid_1,
-  page_groupid_2,
-  device,
-  geo_id,
-  CPM_avg,
-  n,
-  n_gtz,  -- количество визитов у которых CPM было больше ноля
-  sd
-FROM
-  cpm_per_page_groupids_cpa
-
-UNION ALL
-
-SELECT
-  'CPC' as type,
-  page_groupid_1,
-  page_groupid_2,
-  device,
-  geo_id,
-  CPM_avg,
-  n,
-  n_gtz,  -- количество визитов у которых CPM было больше ноля
-  sd
-FROM
-  cpm_per_page_groupids_cpc
+  TRANSFORM
+  (
+    page_groupid_1,
+    page_groupid_2,
+    cpm,
+    n,
+    sd,
+    cpms
+  )
+  USING 'python bootstrap_cpm.py'
+  AS
+  (
+    page_groupid_1,
+    page_groupid_2,
+    cpm,
+    n,
+    sd,
+    bootstrap_mean,
+    left_border,
+    right_border
+  )
+FROM cpm_by_groupid
